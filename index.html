@@ -48,9 +48,10 @@
     <!-- AI 題庫擴充區塊 -->
     <details style="text-align: left;">
       <summary style="cursor: pointer; color: #0070f3; font-weight: bold;">⚙️ 題庫管理 (目前共有 <span id="db-count">0</span> 題)</summary>
-      <p style="font-size: 0.85rem; margin-top: 8px;">你可以將 AI 生成的 JSON 資料貼入下方，擴充專屬解剖題庫：</p>
+      <p style="font-size: 0.85rem; margin-top: 8px;">你可以將 AI 生成的 JSON 資料貼入下方，擴充專屬解剖題庫（<b>將永久儲存於手機</b>）：</p>
       <textarea id="json-input" placeholder='[{"zh":"膝蓋骨","en":"Patella","type":"骨骼"}]'></textarea>
       <button class="btn btn-secondary" onclick="importCustomJSON()" style="font-size: 0.9rem; padding: 8px;">匯入/擴充題庫</button>
+      <button class="btn btn-secondary" onclick="clearCustomData()" style="font-size: 0.8rem; padding: 5px; background:#e53e3e; margin-top:5px;">重置回預設題庫</button>
     </details>
   </div>
 
@@ -85,7 +86,7 @@
 
 <script>
   // 預設經權威校對的解剖學題庫
-  let anatomyData = [
+  const defaultAnatomyData = [
     { zh: "股四頭肌", en: "Quadriceps femoris", type: "肌肉" },
     { zh: "胸大肌", en: "Pectoralis major", type: "肌肉" },
     { zh: "肱二頭肌", en: "Biceps brachii", type: "肌肉" },
@@ -100,6 +101,7 @@
     { zh: "正中神經", en: "Median nerve", type: "神經" }
   ];
 
+  let anatomyData = [];
   let alarmTimer = null;
   let memorizeInterval = null;
   let currentItems = [];
@@ -109,8 +111,26 @@
   let failCount = 0;
   let audioContext = null;
 
-  // 初始化載入題庫數量
-  document.getElementById('db-count').innerText = anatomyData.length;
+  // 1. 初始化：優先從 localStorage 載入儲存的題庫
+  function loadDatabase() {
+    const localData = localStorage.getItem('anatomy_alarm_db');
+    if (localData) {
+      try {
+        anatomyData = JSON.parse(localData);
+      } catch(e) {
+        anatomyData = [...defaultAnatomyData];
+      }
+    } else {
+      anatomyData = [...defaultAnatomyData];
+    }
+    document.getElementById('db-count').innerText = anatomyData.length;
+  }
+  loadDatabase();
+
+  // 請求通知權限（方便靜音時推送通知）
+  if ("Notification" in window && Notification.permission !== "granted") {
+    Notification.requestPermission();
+  }
 
   function importCustomJSON() {
     const input = document.getElementById('json-input').value;
@@ -118,33 +138,61 @@
       const parsed = JSON.parse(input);
       if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].zh && parsed[0].en) {
         anatomyData = anatomyData.concat(parsed);
+        // 永久儲存至 localStorage
+        localStorage.setItem('anatomy_alarm_db', JSON.stringify(anatomyData));
         document.getElementById('db-count').innerText = anatomyData.length;
-        alert(`成功匯入 ${parsed.length} 條解剖學題目！目前總計 ${anatomyData.length} 題。`);
+        alert(`成功匯入 ${parsed.length} 條題目！已永久儲存至手機（總計 ${anatomyData.length} 題）。`);
         document.getElementById('json-input').value = '';
       } else {
         alert("JSON 格式不符！必須包含 zh, en 與 type 欄位。");
       }
     } catch (e) {
-      alert("JSON 解析失敗，請檢查格式是否正確。");
+      alert("JSON 解析失敗，請確保貼入的是標準 JSON 格式（包含雙引號）。");
     }
   }
 
-  function playAlarmSound() {
+  function clearCustomData() {
+    if (confirm("確定要重置題庫回預設嗎？特製題目將會被清除。")) {
+      localStorage.removeItem('anatomy_alarm_db');
+      loadDatabase();
+      alert("已重置為預設題庫。");
+    }
+  }
+
+  function triggerAlarmEffects() {
+    // 聲音播放
     if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const osc = audioContext.createOscillator();
     const gain = audioContext.createGain();
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(880, audioContext.currentTime);
-    gain.gain.setValueAtTime(0.6, audioContext.currentTime);
+    gain.gain.setValueAtTime(0.8, audioContext.currentTime);
     osc.connect(gain);
     gain.connect(audioContext.destination);
     osc.start();
-    osc.stop(audioContext.currentTime + 2.0);
+    osc.stop(audioContext.currentTime + 3.0);
+
+    // 手機震動 (持續震動模式：震動500ms, 停200ms)
+    if ("vibrate" in navigator) {
+      navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
+    }
+
+    // 發送推播通知（防止靜音沒聽到）
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification("⏰ 醫學解剖鬧鐘響起！", {
+        body: "請點擊進入進行 2 分鐘解剖清醒測試！",
+        icon: "https://cdn-icons-png.flaticon.com/512/1827/1827312.png"
+      });
+    }
   }
 
   function setAlarm() {
     const timeInput = document.getElementById('alarm-time').value;
     if (!timeInput) return alert("請先選擇時間！");
+
+    // 啟動 AudioContext 避開瀏覽器自動播放限制
+    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioContext.state === 'suspended') audioContext.resume();
 
     const [hours, minutes] = timeInput.split(':').map(Number);
     const now = new Date();
@@ -161,10 +209,8 @@
   }
 
   function triggerAlarm() {
-    playAlarmSound();
-    // 隨機抽 4 組不重複題目
+    triggerAlarmEffects();
     currentItems = [...anatomyData].sort(() => 0.5 - Math.random()).slice(0, 4);
-    
     showScreen('memorize-screen');
     startMemorizeTimer();
   }
@@ -179,7 +225,7 @@
       </div>
     `).join('');
 
-    let secondsLeft = 120; // 2 分鐘
+    let secondsLeft = 120;
     const timerEl = document.getElementById('memorize-timer');
     
     memorizeInterval = setInterval(() => {
@@ -269,8 +315,6 @@
         showScreen('result-screen');
         document.getElementById('result-title').innerText = "⚠️ 測驗失敗（連續錯誤 2 次）";
         document.getElementById('result-desc').innerText = "大腦尚未清醒，系統已自動設定 5 分鐘後重新響起！";
-        
-        // 5 分鐘後重新觸發鬧鐘
         setTimeout(triggerAlarm, 5 * 60 * 1000);
       }
     }
