@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>醫學生專用 - 解剖學清醒鬧鐘</title>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: #f0f4f8; color: #102a43; margin: 0; padding: 20px; display: flex; justify-content: center; }
+    .card { background: white; width: 100%; max-width: 520px; padding: 24px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); text-align: center; }
+    h1 { font-size: 1.5rem; color: #0b69a3; margin-bottom: 8px; }
+    p { color: #486581; font-size: 0.95rem; }
+    .timer { font-size: 2.8rem; font-weight: bold; color: #d9381e; margin: 15px 0; font-family: monospace; }
+    .btn { background: #0070f3; color: white; border: none; padding: 12px 24px; font-size: 1rem; border-radius: 8px; cursor: pointer; transition: 0.2s; width: 100%; margin-top: 10px; font-weight: 600; }
+    .btn:hover { background: #0051a8; }
+    .btn-secondary { background: #829ab1; }
+    .btn-secondary:hover { background: #627d98; }
+    .item-card { background: #f0f4f8; border: 1px solid #bcccdc; border-radius: 8px; padding: 12px; margin: 8px 0; text-align: left; }
+    .item-title { font-weight: bold; font-size: 1.15rem; color: #102a43; }
+    .item-sub { color: #486581; font-size: 0.95rem; font-style: italic; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+    .option-btn { background: #f0f4f8; border: 2px solid #bcccdc; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 0.95rem; word-break: break-word; min-height: 54px; display: flex; align-items: center; justify-content: center; }
+    .option-btn.selected { border-color: #0070f3; background: #e6f2ff; color: #0051a8; font-weight: bold; }
+    .option-btn.matched { background: #d2f9e3; border-color: #27ab83; color: #147d64; cursor: default; }
+    .badge { display: inline-block; background: #d9e2ec; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; color: #334e68; font-weight: bold; margin-bottom: 4px; }
+    .hidden { display: none; }
+    textarea { width: 100%; height: 100px; margin-top: 10px; padding: 10px; border-radius: 8px; border: 1px solid #bcccdc; font-family: monospace; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <!-- 設定鬧鐘畫面 -->
+  <div id="setup-screen">
+    <h1>解剖學清醒鬧鐘</h1>
+    <p>響鈴後需完成 4 組醫學解剖名詞（中/英）配對才可關閉鬧鐘。</p>
+    
+    <div style="margin: 20px 0; background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0;">
+      <label for="alarm-time" style="font-size: 1.1rem; font-weight: bold;">設定鬧鐘時間：</label><br><br>
+      <input type="time" id="alarm-time" style="font-size: 1.5rem; padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
+    </div>
+    
+    <button class="btn" onclick="setAlarm()">設定鬧鐘</button>
+    <p id="alarm-status" style="margin-top: 10px; color: #147d64; font-weight: bold;"></p>
+
+    <hr style="margin: 25px 0; border: 0; border-top: 1px solid #e2e8f0;">
+
+    <!-- AI 題庫擴充區塊 -->
+    <details style="text-align: left;">
+      <summary style="cursor: pointer; color: #0070f3; font-weight: bold;">⚙️ 題庫管理 (目前共有 <span id="db-count">0</span> 題)</summary>
+      <p style="font-size: 0.85rem; margin-top: 8px;">你可以將 AI 生成的 JSON 資料貼入下方，擴充專屬解剖題庫：</p>
+      <textarea id="json-input" placeholder='[{"zh":"膝蓋骨","en":"Patella","type":"骨骼"}]'></textarea>
+      <button class="btn btn-secondary" onclick="importCustomJSON()" style="font-size: 0.9rem; padding: 8px;">匯入/擴充題庫</button>
+    </details>
+  </div>
+
+  <!-- 背誦畫面 -->
+  <div id="memorize-screen" class="hidden">
+    <span class="badge">STAGE 1: MEMORIZATION</span>
+    <h1>請利用 2 分鐘背誦以下解剖結構</h1>
+    <div class="timer" id="memorize-timer">02:00</div>
+    <div id="memorize-list"></div>
+    <button class="btn" onclick="startTestNow()">我背好了，直接開始測試</button>
+  </div>
+
+  <!-- 測試畫面 -->
+  <div id="test-screen" class="hidden">
+    <span class="badge">STAGE 2: MATCHING TEST</span>
+    <h1>配對中文名稱與對應英文</h1>
+    <p id="test-info">剩餘允許失敗次數：<span id="fail-left" style="color:#d9381e; font-weight:bold;">2</span> 次</p>
+    
+    <div class="grid">
+      <div id="zh-column"></div>
+      <div id="en-column"></div>
+    </div>
+  </div>
+
+  <!-- 結果畫面 -->
+  <div id="result-screen" class="hidden">
+    <h1 id="result-title"></h1>
+    <p id="result-desc"></p>
+    <button class="btn" onclick="resetApp()">返回主畫面</button>
+  </div>
+</div>
+
+<script>
+  // 預設經權威校對的解剖學題庫
+  let anatomyData = [
+    { zh: "股四頭肌", en: "Quadriceps femoris", type: "肌肉" },
+    { zh: "胸大肌", en: "Pectoralis major", type: "肌肉" },
+    { zh: "肱二頭肌", en: "Biceps brachii", type: "肌肉" },
+    { zh: "胸鎖乳突肌", en: "Sternocleidomastoid", type: "肌肉" },
+    { zh: "橈骨", en: "Radius", type: "骨骼" },
+    { zh: "股骨", en: "Femur", type: "骨骼" },
+    { zh: "蝶骨", en: "Sphenoid bone", type: "骨骼" },
+    { zh: "頸內動脈", en: "Internal carotid artery", type: "血管" },
+    { zh: "大隱靜脈", en: "Great saphenous vein", type: "血管" },
+    { zh: "迷走神經", en: "Vagus nerve", type: "神經" },
+    { zh: "坐骨神經", en: "Sciatic nerve", type: "神經" },
+    { zh: "正中神經", en: "Median nerve", type: "神經" }
+  ];
+
+  let alarmTimer = null;
+  let memorizeInterval = null;
+  let currentItems = [];
+  let selectedZh = null;
+  let selectedEn = null;
+  let matchedCount = 0;
+  let failCount = 0;
+  let audioContext = null;
+
+  // 初始化載入題庫數量
+  document.getElementById('db-count').innerText = anatomyData.length;
+
+  function importCustomJSON() {
+    const input = document.getElementById('json-input').value;
+    try {
+      const parsed = JSON.parse(input);
+      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].zh && parsed[0].en) {
+        anatomyData = anatomyData.concat(parsed);
+        document.getElementById('db-count').innerText = anatomyData.length;
+        alert(`成功匯入 ${parsed.length} 條解剖學題目！目前總計 ${anatomyData.length} 題。`);
+        document.getElementById('json-input').value = '';
+      } else {
+        alert("JSON 格式不符！必須包含 zh, en 與 type 欄位。");
+      }
+    } catch (e) {
+      alert("JSON 解析失敗，請檢查格式是否正確。");
+    }
+  }
+
+  function playAlarmSound() {
+    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(880, audioContext.currentTime);
+    gain.gain.setValueAtTime(0.6, audioContext.currentTime);
+    osc.connect(gain);
+    gain.connect(audioContext.destination);
+    osc.start();
+    osc.stop(audioContext.currentTime + 2.0);
+  }
+
+  function setAlarm() {
+    const timeInput = document.getElementById('alarm-time').value;
+    if (!timeInput) return alert("請先選擇時間！");
+
+    const [hours, minutes] = timeInput.split(':').map(Number);
+    const now = new Date();
+    const alarmTime = new Date();
+    alarmTime.setHours(hours, minutes, 0, 0);
+
+    if (alarmTime <= now) alarmTime.setDate(alarmTime.getDate() + 1);
+
+    const timeDiff = alarmTime - now;
+    if (alarmTimer) clearTimeout(alarmTimer);
+
+    alarmTimer = setTimeout(triggerAlarm, timeDiff);
+    document.getElementById('alarm-status').innerText = `鬧鐘已設定：${alarmTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+  }
+
+  function triggerAlarm() {
+    playAlarmSound();
+    // 隨機抽 4 組不重複題目
+    currentItems = [...anatomyData].sort(() => 0.5 - Math.random()).slice(0, 4);
+    
+    showScreen('memorize-screen');
+    startMemorizeTimer();
+  }
+
+  function startMemorizeTimer() {
+    const listEl = document.getElementById('memorize-list');
+    listEl.innerHTML = currentItems.map(item => `
+      <div class="item-card">
+        <span class="badge">${item.type}</span>
+        <div class="item-title">${item.zh}</div>
+        <div class="item-sub">${item.en}</div>
+      </div>
+    `).join('');
+
+    let secondsLeft = 120; // 2 分鐘
+    const timerEl = document.getElementById('memorize-timer');
+    
+    memorizeInterval = setInterval(() => {
+      secondsLeft--;
+      const m = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
+      const s = String(secondsLeft % 60).padStart(2, '0');
+      timerEl.innerText = `${m}:${s}`;
+
+      if (secondsLeft <= 0) {
+        clearInterval(memorizeInterval);
+        startTestNow();
+      }
+    }, 1000);
+  }
+
+  function startTestNow() {
+    if (memorizeInterval) clearInterval(memorizeInterval);
+    showScreen('test-screen');
+    initTestUI();
+  }
+
+  function initTestUI() {
+    matchedCount = 0;
+    selectedZh = null;
+    selectedEn = null;
+
+    const zhList = [...currentItems].sort(() => 0.5 - Math.random());
+    const enList = [...currentItems].sort(() => 0.5 - Math.random());
+
+    document.getElementById('zh-column').innerHTML = zhList.map(item => `
+      <div class="option-btn" data-zh="${item.zh}" onclick="selectZh(this, '${item.zh}')">${item.zh}</div>
+    `).join('<div style="height:8px"></div>');
+
+    document.getElementById('en-column').innerHTML = enList.map(item => `
+      <div class="option-btn" data-en="${item.en}" onclick="selectEn(this, '${item.en}')">${item.en}</div>
+    `).join('<div style="height:8px"></div>');
+  }
+
+  function selectZh(el, zh) {
+    if (el.classList.contains('matched')) return;
+    document.querySelectorAll('#zh-column .option-btn').forEach(btn => btn.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedZh = zh;
+    checkMatch();
+  }
+
+  function selectEn(el, en) {
+    if (el.classList.contains('matched')) return;
+    document.querySelectorAll('#en-column .option-btn').forEach(btn => btn.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedEn = en;
+    checkMatch();
+  }
+
+  function checkMatch() {
+    if (!selectedZh || !selectedEn) return;
+
+    const correctItem = currentItems.find(i => i.zh === selectedZh);
+    const isCorrect = correctItem && correctItem.en === selectedEn;
+
+    const zhEl = document.querySelector(`#zh-column .option-btn[data-zh="${selectedZh}"]`);
+    const enEl = document.querySelector(`#en-column .option-btn[data-en="${selectedEn}"]`);
+
+    if (isCorrect) {
+      zhEl.className = 'option-btn matched';
+      enEl.className = 'option-btn matched';
+      matchedCount++;
+      selectedZh = null;
+      selectedEn = null;
+
+      if (matchedCount === 4) {
+        showScreen('result-screen');
+        document.getElementById('result-title').innerText = "🎉 清醒測試通過！";
+        document.getElementById('result-desc').innerText = "成功完成 4 組醫學解剖配對，鬧鐘已解除。";
+      }
+    } else {
+      failCount++;
+      document.getElementById('fail-left').innerText = 2 - failCount;
+      alert(`❌ 配對錯誤！ (${selectedZh} ≠ ${selectedEn})`);
+      
+      zhEl.classList.remove('selected');
+      enEl.classList.remove('selected');
+      selectedZh = null;
+      selectedEn = null;
+
+      if (failCount >= 2) {
+        showScreen('result-screen');
+        document.getElementById('result-title').innerText = "⚠️ 測驗失敗（連續錯誤 2 次）";
+        document.getElementById('result-desc').innerText = "大腦尚未清醒，系統已自動設定 5 分鐘後重新響起！";
+        
+        // 5 分鐘後重新觸發鬧鐘
+        setTimeout(triggerAlarm, 5 * 60 * 1000);
+      }
+    }
+  }
+
+  function showScreen(screenId) {
+    ['setup-screen', 'memorize-screen', 'test-screen', 'result-screen'].forEach(id => {
+      document.getElementById(id).classList.add('hidden');
+    });
+    document.getElementById(screenId).classList.remove('hidden');
+  }
+
+  function resetApp() {
+    failCount = 0;
+    document.getElementById('fail-left').innerText = 2;
+    showScreen('setup-screen');
+    document.getElementById('alarm-status').innerText = "";
+  }
+</script>
+</body>
+</html>
