@@ -13,6 +13,8 @@
     .timer { font-size: 2.8rem; font-weight: bold; color: #d9381e; margin: 15px 0; font-family: monospace; }
     .btn { background: #0070f3; color: white; border: none; padding: 12px 24px; font-size: 1rem; border-radius: 8px; cursor: pointer; transition: 0.2s; width: 100%; margin-top: 10px; font-weight: 600; }
     .btn:hover { background: #0051a8; }
+    .btn-danger { background: #d9381e; font-size: 1.3rem; padding: 18px; }
+    .btn-danger:hover { background: #b0230c; }
     .btn-secondary { background: #829ab1; }
     .btn-secondary:hover { background: #627d98; }
     .item-card { background: #f0f4f8; border: 1px solid #bcccdc; border-radius: 8px; padding: 12px; margin: 8px 0; text-align: left; }
@@ -25,46 +27,62 @@
     .badge { display: inline-block; background: #d9e2ec; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; color: #334e68; font-weight: bold; margin-bottom: 4px; }
     .hidden { display: none; }
     textarea { width: 100%; height: 100px; margin-top: 10px; padding: 10px; border-radius: 8px; border: 1px solid #bcccdc; font-family: monospace; font-size: 0.85rem; }
+    .volume-warning { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; padding: 12px; border-radius: 8px; margin-top: 15px; font-size: 0.9rem; text-align: left; }
+    .ring-box { animation: pulse 1s infinite alternate; padding: 20px; background: #ffe3e3; border-radius: 12px; margin: 20px 0; }
+    @keyframes pulse { from { transform: scale(0.98); } to { transform: scale(1.02); } }
   </style>
 </head>
 <body>
 
 <div class="card">
-  <!-- 設定鬧鐘畫面 -->
+  <!-- 1. 設定鬧鐘畫面 -->
   <div id="setup-screen">
     <h1>解剖學清醒鬧鐘</h1>
-    <p>響鈴後需完成 4 組醫學解剖名詞（中/英）配對才可關閉鬧鐘。</p>
+    <p>響鈴後需完成 <b>3 組</b> 醫學解剖名詞（中/英）配對才可關閉鬧鐘。</p>
     
     <div style="margin: 20px 0; background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0;">
       <label for="alarm-time" style="font-size: 1.1rem; font-weight: bold;">設定鬧鐘時間：</label><br><br>
       <input type="time" id="alarm-time" style="font-size: 1.5rem; padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
     </div>
     
-    <button class="btn" onclick="setAlarm()">設定鬧鐘</button>
+    <button class="btn" onclick="setAlarm()">設定鬧鐘（試聽旋律）</button>
     <p id="alarm-status" style="margin-top: 10px; color: #147d64; font-weight: bold;"></p>
+
+    <div class="volume-warning">
+      <b>⚠️ 旋律試聽檢查：</b><br>
+      點擊「設定鬧鐘」時會試播一段聲音。如果您沒聽到，請確認手機已關閉靜音模式並調大媒體音量。
+    </div>
 
     <hr style="margin: 25px 0; border: 0; border-top: 1px solid #e2e8f0;">
 
-    <!-- AI 題庫擴充區塊 -->
     <details style="text-align: left;">
       <summary style="cursor: pointer; color: #0070f3; font-weight: bold;">⚙️ 題庫管理 (目前共有 <span id="db-count">0</span> 題)</summary>
-      <p style="font-size: 0.85rem; margin-top: 8px;">你可以將 AI 生成的 JSON 資料貼入下方，擴充專屬解剖題庫（<b>將永久儲存於手機</b>）：</p>
+      <p style="font-size: 0.85rem; margin-top: 8px;">你可以將 AI 生成的 JSON 資料貼入下方，擴充專屬解剖題庫：</p>
       <textarea id="json-input" placeholder='[{"zh":"膝蓋骨","en":"Patella","type":"骨骼"}]'></textarea>
       <button class="btn btn-secondary" onclick="importCustomJSON()" style="font-size: 0.9rem; padding: 8px;">匯入/擴充題庫</button>
       <button class="btn btn-secondary" onclick="clearCustomData()" style="font-size: 0.8rem; padding: 5px; background:#e53e3e; margin-top:5px;">重置回預設題庫</button>
     </details>
   </div>
 
-  <!-- 背誦畫面 -->
+  <!-- 2. 響鈴畫面：按下關閉觸發測驗 -->
+  <div id="ringing-screen" class="hidden">
+    <div class="ring-box">
+      <h1 style="color: #d9381e; font-size: 2rem; margin: 0;">⏰ 鬧鐘響起中！</h1>
+      <p style="margin-top: 10px;">請點擊下方按鈕關閉鈴聲並開始清醒測驗</p>
+    </div>
+    <button class="btn btn-danger" onclick="stopRingingAndStartQuiz()">關閉鬧鐘（開始清醒測試）</button>
+  </div>
+
+  <!-- 3. 背誦畫面 (2分鐘倒數) -->
   <div id="memorize-screen" class="hidden">
     <span class="badge">STAGE 1: MEMORIZATION</span>
-    <h1>請利用 2 分鐘背誦以下解剖結構</h1>
+    <h1>請利用 2 分鐘背誦以下 3 個解剖結構</h1>
     <div class="timer" id="memorize-timer">02:00</div>
     <div id="memorize-list"></div>
     <button class="btn" onclick="startTestNow()">我背好了，直接開始測試</button>
   </div>
 
-  <!-- 測試畫面 -->
+  <!-- 4. 測試畫面 (配對3組) -->
   <div id="test-screen" class="hidden">
     <span class="badge">STAGE 2: MATCHING TEST</span>
     <h1>配對中文名稱與對應英文</h1>
@@ -76,7 +94,7 @@
     </div>
   </div>
 
-  <!-- 結果畫面 -->
+  <!-- 5. 結果畫面 -->
   <div id="result-screen" class="hidden">
     <h1 id="result-title"></h1>
     <p id="result-desc"></p>
@@ -85,7 +103,6 @@
 </div>
 
 <script>
-  // 預設經權威校對的解剖學題庫
   const defaultAnatomyData = [
     { zh: "股四頭肌", en: "Quadriceps femoris", type: "肌肉" },
     { zh: "胸大肌", en: "Pectoralis major", type: "肌肉" },
@@ -104,6 +121,7 @@
   let anatomyData = [];
   let alarmTimer = null;
   let memorizeInterval = null;
+  let alarmLoopInterval = null;
   let currentItems = [];
   let selectedZh = null;
   let selectedEn = null;
@@ -111,7 +129,6 @@
   let failCount = 0;
   let audioContext = null;
 
-  // 1. 初始化：優先從 localStorage 載入儲存的題庫
   function loadDatabase() {
     const localData = localStorage.getItem('anatomy_alarm_db');
     if (localData) {
@@ -127,7 +144,6 @@
   }
   loadDatabase();
 
-  // 請求通知權限（方便靜音時推送通知）
   if ("Notification" in window && Notification.permission !== "granted") {
     Notification.requestPermission();
   }
@@ -138,46 +154,65 @@
       const parsed = JSON.parse(input);
       if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].zh && parsed[0].en) {
         anatomyData = anatomyData.concat(parsed);
-        // 永久儲存至 localStorage
         localStorage.setItem('anatomy_alarm_db', JSON.stringify(anatomyData));
         document.getElementById('db-count').innerText = anatomyData.length;
-        alert(`成功匯入 ${parsed.length} 條題目！已永久儲存至手機（總計 ${anatomyData.length} 題）。`);
+        alert(`成功匯入 ${parsed.length} 條題目！已永久儲存。`);
         document.getElementById('json-input').value = '';
       } else {
         alert("JSON 格式不符！必須包含 zh, en 與 type 欄位。");
       }
     } catch (e) {
-      alert("JSON 解析失敗，請確保貼入的是標準 JSON 格式（包含雙引號）。");
+      alert("JSON 解析失敗，請確保貼入標準 JSON 格式（包含雙引號）。");
     }
   }
 
   function clearCustomData() {
-    if (confirm("確定要重置題庫回預設嗎？特製題目將會被清除。")) {
+    if (confirm("確定要重置題庫回預設嗎？")) {
       localStorage.removeItem('anatomy_alarm_db');
       loadDatabase();
       alert("已重置為預設題庫。");
     }
   }
 
-  function triggerAlarmEffects() {
-    // 聲音播放
+  // 播放柔和開機旋律 (四音階)
+  function playArpeggioMelody() {
     if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(880, audioContext.currentTime);
-    gain.gain.setValueAtTime(0.8, audioContext.currentTime);
-    osc.connect(gain);
-    gain.connect(audioContext.destination);
-    osc.start();
-    osc.stop(audioContext.currentTime + 3.0);
+    if (audioContext.state === 'suspended') audioContext.resume();
 
-    // 手機震動 (持續震動模式：震動500ms, 停200ms)
-    if ("vibrate" in navigator) {
-      navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
-    }
+    const notes = [523.25, 659.25, 783.99, 1046.50];
+    const now = audioContext.currentTime;
 
-    // 發送推播通知（防止靜音沒聽到）
+    notes.forEach((freq, index) => {
+      const startTime = now + (index * 0.15);
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, startTime);
+
+      gain.gain.setValueAtTime(0.01, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.6, startTime + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.3);
+
+      osc.connect(gain);
+      gain.connect(audioContext.destination);
+
+      osc.start(startTime);
+      osc.stop(startTime + 0.35);
+    });
+  }
+
+  // 啟動鬧鐘持續響鈴與震動迴圈
+  function startAlarmRinging() {
+    playArpeggioMelody();
+    if ("vibrate" in navigator) navigator.vibrate([400, 200, 400]);
+
+    if (alarmLoopInterval) clearInterval(alarmLoopInterval);
+    alarmLoopInterval = setInterval(() => {
+      playArpeggioMelody();
+      if ("vibrate" in navigator) navigator.vibrate([400, 200, 400]);
+    }, 1500);
+
     if ("Notification" in window && Notification.permission === "granted") {
       new Notification("⏰ 醫學解剖鬧鐘響起！", {
         body: "請點擊進入進行 2 分鐘解剖清醒測試！",
@@ -186,13 +221,19 @@
     }
   }
 
+  // 停止響鈴迴圈
+  function stopAlarmRinging() {
+    if (alarmLoopInterval) {
+      clearInterval(alarmLoopInterval);
+      alarmLoopInterval = null;
+    }
+  }
+
   function setAlarm() {
     const timeInput = document.getElementById('alarm-time').value;
     if (!timeInput) return alert("請先選擇時間！");
 
-    // 啟動 AudioContext 避開瀏覽器自動播放限制
-    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioContext.state === 'suspended') audioContext.resume();
+    playArpeggioMelody(); // 點擊時試聽
 
     const [hours, minutes] = timeInput.split(':').map(Number);
     const now = new Date();
@@ -208,9 +249,16 @@
     document.getElementById('alarm-status').innerText = `鬧鐘已設定：${alarmTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
   }
 
+  // 1. 鬧鐘時間到：跳出響鈴畫面並播放音樂
   function triggerAlarm() {
-    triggerAlarmEffects();
-    currentItems = [...anatomyData].sort(() => 0.5 - Math.random()).slice(0, 4);
+    showScreen('ringing-screen');
+    startAlarmRinging();
+  }
+
+  // 2. 按下「關閉鬧鐘」：停止聲音，抽 3 題並跳出背誦測試
+  function stopRingingAndStartQuiz() {
+    stopAlarmRinging();
+    currentItems = [...anatomyData].sort(() => 0.5 - Math.random()).slice(0, 3);
     showScreen('memorize-screen');
     startMemorizeTimer();
   }
@@ -225,9 +273,10 @@
       </div>
     `).join('');
 
-    let secondsLeft = 120;
+    let secondsLeft = 120; // 2 分鐘背誦
     const timerEl = document.getElementById('memorize-timer');
     
+    if (memorizeInterval) clearInterval(memorizeInterval);
     memorizeInterval = setInterval(() => {
       secondsLeft--;
       const m = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
@@ -247,6 +296,7 @@
     initTestUI();
   }
 
+  // 3. 配對測試邏輯
   function initTestUI() {
     matchedCount = 0;
     selectedZh = null;
@@ -280,6 +330,7 @@
     checkMatch();
   }
 
+  // 4. 判斷成功 or 失敗 (允許重試 1 次，共 2 次機會)
   function checkMatch() {
     if (!selectedZh || !selectedEn) return;
 
@@ -296,10 +347,11 @@
       selectedZh = null;
       selectedEn = null;
 
-      if (matchedCount === 4) {
+      // 4.1 成功：配對完 3 組，鬧鐘正式關閉
+      if (matchedCount === 3) {
         showScreen('result-screen');
         document.getElementById('result-title').innerText = "🎉 清醒測試通過！";
-        document.getElementById('result-desc').innerText = "成功完成 4 組醫學解剖配對，鬧鐘已解除。";
+        document.getElementById('result-desc').innerText = "成功完成 3 組醫學解剖配對，鬧鐘已解除。";
       }
     } else {
       failCount++;
@@ -311,17 +363,21 @@
       selectedZh = null;
       selectedEn = null;
 
+      // 4.2 失敗：失敗 2 次後，自動設定 5 分鐘後的鬧鐘
       if (failCount >= 2) {
         showScreen('result-screen');
         document.getElementById('result-title').innerText = "⚠️ 測驗失敗（連續錯誤 2 次）";
-        document.getElementById('result-desc').innerText = "大腦尚未清醒，系統已自動設定 5 分鐘後重新響起！";
-        setTimeout(triggerAlarm, 5 * 60 * 1000);
+        document.getElementById('result-desc').innerText = "大腦尚未清醒！系統已自動幫你設定 5 分鐘後重新響起。";
+        
+        // 自動重設 5 分鐘後鬧鐘 (5 * 60 * 1000 ms)
+        if (alarmTimer) clearTimeout(alarmTimer);
+        alarmTimer = setTimeout(triggerAlarm, 5 * 60 * 1000);
       }
     }
   }
 
   function showScreen(screenId) {
-    ['setup-screen', 'memorize-screen', 'test-screen', 'result-screen'].forEach(id => {
+    ['setup-screen', 'ringing-screen', 'memorize-screen', 'test-screen', 'result-screen'].forEach(id => {
       document.getElementById(id).classList.add('hidden');
     });
     document.getElementById(screenId).classList.remove('hidden');
